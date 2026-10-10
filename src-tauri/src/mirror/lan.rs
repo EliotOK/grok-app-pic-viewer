@@ -115,7 +115,8 @@ fn enumerate_lan_ipv4() -> Option<Ipv4Addr> {
     // Spawn without a console window; the app is a GUI process.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     // One `address|interfaceAlias` line per adapter.
-    const SCRIPT: &str = "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { $_.IPAddress + '|' + $_.InterfaceAlias }";
+    const SCRIPT: &str =
+        "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { $_.IPAddress + '|' + $_.InterfaceAlias }";
 
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
