@@ -440,7 +440,7 @@ jobs:
           case "$PLATFORMS" in
             windows) want='_x64-setup\.exe$|_x64-portable\.zip$' ;;
             macos) want='_aarch64\.dmg$|_x64\.dmg$' ;;
-            linux) want='_amd64\.AppImage$|_amd64\.deb$|_x86_64\.rpm$' ;;
+            linux) want='_amd64\.AppImage$|_amd64\.deb$|\.x86_64\.rpm$' ;;
             *)
               echo "::error::unknown platforms input: $PLATFORMS"
               exit 1
