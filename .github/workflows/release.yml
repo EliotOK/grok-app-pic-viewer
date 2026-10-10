@@ -40,6 +40,16 @@ on:
         description: "Existing tag to rebuild (e.g. v0.1.0). Leave empty to use package version draft."
         required: false
         default: ""
+      platforms:
+        description: "Platforms to build. Tag pushes always build all of them; a manual run can pick one."
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
 
 concurrency:
   group: release-${{ github.ref }}
@@ -49,23 +59,38 @@ permissions:
   contents: write
 
 jobs:
+  # Tag releases build every platform (unchanged upstream behavior). A manual run
+  # may pick one, which keeps the other runners out of the queue entirely —
+  # a job-level `if` cannot read `matrix`, so the list is built here instead.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: Pick the platform matrix
+        id: pick
+        shell: bash
+        env:
+          PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'all' }}
+        run: |
+          set -euo pipefail
+          macos='{"platform":"macos-latest","args":"--target aarch64-apple-darwin","name":"macOS-ARM64"},{"platform":"macos-latest","args":"--target x86_64-apple-darwin","name":"macOS-x64"}'
+          windows='{"platform":"windows-latest","args":"","name":"Windows-x64"}'
+          linux='{"platform":"ubuntu-22.04","args":"","name":"Linux-x64"}'
+          case "$PLATFORMS" in
+            windows) include="$windows" ;;
+            macos) include="$macos" ;;
+            linux) include="$linux" ;;
+            *) include="$macos,$windows,$linux" ;;
+          esac
+          echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
+          echo "Platforms requested: $PLATFORMS"
+
   publish:
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-            name: macOS-ARM64
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-            name: macOS-x64
-          - platform: windows-latest
-            args: ""
-            name: Windows-x64
-          - platform: ubuntu-22.04
-            args: ""
-            name: Linux-x64
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     runs-on: ${{ matrix.platform }}
     name: Build ${{ matrix.name }}
