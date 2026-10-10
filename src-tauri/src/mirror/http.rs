@@ -69,6 +69,10 @@ pub async fn start_server(
     // Token-gated routes (HTML shell, API, WS, static under /t/{token}/…).
     let gated = Router::new()
         .route("/t/{token}/api/health", get(health_handler))
+        // Local media for the phone client: the loopback media server only
+        // exists on this host, so the same bytes ride the mirror origin.
+        // Must be registered before the static catch-all.
+        .route("/t/{token}/media", get(media_handler))
         // WS must be registered before the static catch-all.
         .route("/t/{token}/ws", get(ws_handler))
         .route("/t/{token}/", get(index_handler))
@@ -114,6 +118,28 @@ pub async fn start_server(
 
     tracing::info!(port = bound, allow_lan, "mirror http listening");
     Ok((bound, shutdown_tx))
+}
+
+#[derive(Deserialize)]
+struct MediaQuery {
+    /// Absolute filesystem path (percent-decoded by the query extractor).
+    p: String,
+}
+
+/// Serve one local file to the phone: same `path_scope` allowlist as the
+/// desktop media server, same full-body / Range semantics, but reachable
+/// through the token-gated mirror origin instead of `127.0.0.1`.
+async fn media_handler(Query(q): Query<MediaQuery>, headers: HeaderMap) -> Response {
+    let raw = q.p.trim();
+    if raw.is_empty() {
+        return (StatusCode::BAD_REQUEST, "missing p").into_response();
+    }
+    let candidate = PathBuf::from(raw);
+    let Ok(canonical) = crate::path_scope::require_allowed(&candidate) else {
+        return (StatusCode::FORBIDDEN, "path_not_allowed").into_response();
+    };
+    let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
+    crate::media_server::mirror_media_response(&canonical, range)
 }
 
 async fn token_gate_middleware(

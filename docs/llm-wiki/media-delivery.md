@@ -31,6 +31,29 @@ GET http://127.0.0.1:{port}/v1/media?t={token}&p={urlencode(absPath)}
 Frontend entry: `src/lib/imageSrc.ts` (`localPathToMediaHttpUrl`, `resolveImageSrc*`).  
 Preview/office: `src/lib/filePreviewSrc.ts` (reassembles multi-Range for full-file readers).
 
+## Delivery: mirror origin (phone / browser client)
+
+The loopback server is reachable only from this host. A mirror client
+(`/t/{token}/…`) resolves the same absolute paths through the mirror's own
+origin instead:
+
+```
+GET /t/{token}/media?p={urlencode(absPath)}
+```
+
+- **Token**: the path token that already gates the shell — no second secret.
+- **path_scope**: identical allowlist (`path_scope.rs`); denials return 403 and
+  the UI classifies them as `untrusted`.
+- **Body shape**: the same helper the loopback server uses
+  (`media_server::mirror_media_response` → `read_file_chunk`), so images get a
+  full 200 body and video/audio/PDF get bounded 206 chunks.
+- **Frontend**: stays behind the single entry `src/lib/imageSrc.ts`
+  (`localPathToMediaHttpUrl` returns the mirror URL when `isMirrorClient()`),
+  so chat cards, the lightbox and `<video>` need no separate path.
+  `filePreviewSrc.ts` accepts the mirror origin for streamable kinds.
+- **Still desktop-only on a mirror client**: Host thumbnails, video posters and
+  every raw-IPC read (`fs_read_absolute`, `media_read_file_chunk`) — those are
+  not RPC methods, so nothing here changes their reach.
 ## Chat image thumbs (performance)
 
 Chat **card** layout does **not** re-stream full multi-MB originals on every virtual-list remount.

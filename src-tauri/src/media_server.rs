@@ -30,7 +30,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 /// Max bytes returned per Range request (keeps memory bounded — video/audio/PDF).
-const MAX_CHUNK: u64 = 2 * 1024 * 1024; // 2 MiB
+pub(crate) const MAX_CHUNK: u64 = 2 * 1024 * 1024; // 2 MiB
 
 /// Browser-safe dynamic/private port range. Binding port `0` can return a
 /// Chromium-blocked service port on hosts with a customized ephemeral range
@@ -43,7 +43,7 @@ const MEDIA_PORT_BIND_ATTEMPTS: u32 = 64;
 /// Max full-body response without Range (chat images, small binaries).
 /// `<img>` tags do not reassemble multi-Range responses — truncating at
 /// MAX_CHUNK yields broken/empty thumbnails for common multi-MB photos.
-const MAX_FULL_BODY: u64 = 40 * 1024 * 1024; // 40 MiB
+pub(crate) const MAX_FULL_BODY: u64 = 40 * 1024 * 1024; // 40 MiB
 
 /// Max bytes returned by one raw Tauri IPC read. Wallpaper application needs a
 /// complete `File`, but one unbounded IPC response would create a large memory
@@ -512,7 +512,7 @@ impl IntoResponse for FileChunk {
     }
 }
 
-fn read_file_chunk(
+pub(crate) fn read_file_chunk(
     path: &Path,
     range_hdr: Option<&str>,
     head_only: bool,
@@ -588,6 +588,20 @@ fn read_file_chunk(
         head_only,
         cors_origin: None,
     })
+}
+
+/// Media body for the phone mirror (`/t/{token}/media`).
+///
+/// The loopback media server is unreachable from a remote client, so the mirror
+/// router serves the same bytes through its own token-gated origin. The caller
+/// owns the `path_scope` gate; this only reads the canonical path it is given
+/// and keeps the loopback semantics (full body for images, bounded 206 chunks
+/// for Range / large streams).
+pub(crate) fn mirror_media_response(path: &Path, range_hdr: Option<&str>) -> Response {
+    match read_file_chunk(path, range_hdr, false) {
+        Ok(chunk) => chunk.into_response(),
+        Err((status, msg)) => text_status(status, msg),
+    }
 }
 
 fn text_status(status: StatusCode, msg: &str) -> Response {

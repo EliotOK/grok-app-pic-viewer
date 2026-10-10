@@ -15,6 +15,7 @@
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { isTauri } from "@/lib/api";
+import { isMirrorClient, mirrorToken } from "@/lib/mirrorTransport";
 import {
   isFusedQueryKeyPath,
   isRealLocalAbsolutePath,
@@ -123,11 +124,22 @@ function looksAbsoluteFsPath(raw: string): boolean {
  * Returns null when the media server endpoint is not yet known.
  */
 export function localPathToMediaHttpUrl(absPath: string): string | null {
-  const ep = mediaEndpoint;
-  if (!ep?.baseUrl || !ep.token) return null;
   // Last line of defense: a fused `t:/Users/…` query-key path must never hit
   // the media server (path_scope 403 → broken-looking cards on remount).
   if (isFusedQueryKeyPath(absPath)) return null;
+  // Phone / browser mirror: `127.0.0.1` on the client is not this host, so the
+  // same bytes ride the mirror origin instead — `/t/{token}/media?p=…`, gated by
+  // the same path_scope allowlist. Absolute so `<img>`, `<video>` and `fetch`
+  // all accept it, and so `isViewableSrc` still recognises the result.
+  if (isMirrorClient()) {
+    const token = mirrorToken();
+    if (!token) return null;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    if (!origin) return null;
+    return `${origin}/t/${encodeURIComponent(token)}/media?p=${encodeURIComponent(absPath)}`;
+  }
+  const ep = mediaEndpoint;
+  if (!ep?.baseUrl || !ep.token) return null;
   const base = ep.baseUrl.replace(/\/$/, "");
   return `${base}/v1/media?t=${encodeURIComponent(ep.token)}&p=${encodeURIComponent(absPath)}`;
 }

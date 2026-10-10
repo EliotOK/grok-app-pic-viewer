@@ -76,6 +76,28 @@ describe("fused media query keys never reach the media server", () => {
     );
   });
 
+  it("localPathToMediaHttpUrl rides the mirror origin for phone clients", () => {
+    // Phone mirror: the host loopback server is unreachable from the client, so
+    // media must come from the mirror's own token-gated origin. The suite runs
+    // in the node environment, so stub the few window fields the helpers read.
+    const origin = "http://192.168.1.20:63867";
+    vi.stubGlobal("window", { location: { origin }, __MIRROR__: { token: "mir-token" } });
+    try {
+      const url = localPathToMediaHttpUrl("/Users/me/pic.png");
+      expect(url).toBe(
+        `${origin}/t/mir-token/media?p=${encodeURIComponent("/Users/me/pic.png")}`,
+      );
+      // Components gate on isViewableSrc before painting an <img>/<video>.
+      expect(isViewableSrc(url!)).toBe(true);
+      // The loopback endpoint is irrelevant on a mirror client.
+      setMediaEndpoint({ baseUrl: "http://127.0.0.1:9", token: "unused" });
+      expect(localPathToMediaHttpUrl("/Users/me/pic.png")).toBe(url);
+      expect(resolveImageSrcSync("/Users/me/pic.png")).toBe(url);
+    } finally {
+      vi.unstubAllGlobals();
+      resetMediaEndpointForTests();
+    }
+  });
   it("localPathToMediaHttpUrl is a last line of defense", () => {
     setMediaEndpoint({ baseUrl: "http://127.0.0.1:52193", token: "tok" });
     expect(localPathToMediaHttpUrl("t:/Users/me/pic.png")).toBe(null);

@@ -8,6 +8,7 @@
 
 import type { FsReadResult } from "@/lib/api";
 import { isTauri } from "@/lib/api";
+import { isMirrorClient } from "@/lib/mirrorTransport";
 import {
   ensureMediaEndpoint,
   localPathToMediaHttpUrl,
@@ -67,12 +68,12 @@ export async function pathToPreviewUrl(
 ): Promise<string | null> {
   if (!absolutePath) return null;
   // HTML is handled by HtmlBrowser (srcDoc); asset URL is only a fetch fallback
-  if (!isTauri()) {
+  // HTML keeps the file:// fallback; every other kind needs a media origin.
+  if (!isTauri() && !isMirrorClient()) {
     if (kind === "html") return pathToFileUrl(absolutePath);
     return null;
   }
-
-  await ensureMediaEndpoint();
+  if (isTauri()) await ensureMediaEndpoint();
 
   if (!kind || shouldUseMediaHttp(kind) || isOfficeKind(kind)) {
     const http = localPathToMediaHttpUrl(absolutePath);
@@ -92,7 +93,8 @@ export async function resolvePreviewSrc(
   }
 
   // Prefer stream path for video/audio/pdf/large image
-  if (preview.stream && preview.absolutePath && isTauri()) {
+  const mediaOrigin = isTauri() || isMirrorClient();
+  if (preview.stream && preview.absolutePath && mediaOrigin) {
     const url = await pathToPreviewUrl(preview.absolutePath, preview.kind);
     if (url) return url;
   }
@@ -104,7 +106,7 @@ export async function resolvePreviewSrc(
   // Streamable kinds without flag (legacy) still try absolute path
   if (
     preview.absolutePath &&
-    isTauri() &&
+    mediaOrigin &&
     (preview.kind === "video" ||
       preview.kind === "audio" ||
       preview.kind === "pdf" ||
