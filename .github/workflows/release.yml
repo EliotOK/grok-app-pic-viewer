@@ -66,6 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.pick.outputs.matrix }}
+      platforms: ${{ steps.pick.outputs.platforms }}
     steps:
       - name: Pick the platform matrix
         id: pick
@@ -84,6 +85,7 @@ jobs:
             *) include="$macos,$windows,$linux" ;;
           esac
           echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
+          echo "platforms=$PLATFORMS" >> "$GITHUB_OUTPUT"
           echo "Platforms requested: $PLATFORMS"
 
   publish:
@@ -400,8 +402,8 @@ jobs:
   # Latest that is missing Windows (v0.2.32) while the overall workflow is red
   # but easy to miss. Agents / maintainers must wait for this job.
   gate-release-assets:
-    name: Gate — all platform installers present
-    needs: publish
+    name: Gate — requested platform installers present
+    needs: [plan, publish]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -413,6 +415,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
+          PLATFORMS: ${{ needs.plan.outputs.platforms }}
         run: |
           set -euo pipefail
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
@@ -427,7 +430,30 @@ jobs:
               --jq '.assets[].name' 2>/dev/null | sort || true
             exit 1
           fi
-          bash scripts/assert-release-assets.sh "$TAG" --repo "$GITHUB_REPOSITORY"
+          if [[ "$PLATFORMS" == "all" ]]; then
+            bash scripts/assert-release-assets.sh "$TAG" --repo "$GITHUB_REPOSITORY"
+            exit 0
+          fi
+          # Manual single-platform run: this Release intentionally holds one
+          # platform, so assert the installers that platform owns instead of
+          # the all-platform contract above.
+          case "$PLATFORMS" in
+            windows) want='_x64-setup\.exe$|_x64-portable\.zip$' ;;
+            macos) want='_aarch64\.dmg$|_x64\.dmg$' ;;
+            linux) want='_amd64\.AppImage$|_amd64\.deb$|_x86_64\.rpm$' ;;
+            *)
+              echo "::error::unknown platforms input: $PLATFORMS"
+              exit 1
+              ;;
+          esac
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' > assets.txt
+          echo "Assets on $TAG:"; cat assets.txt
+          if ! grep -Eq "$want" assets.txt; then
+            echo "::error::$PLATFORMS installer missing on $TAG"
+            exit 1
+          fi
+          echo "OK: $PLATFORMS installers present"
 
   # After all platform builds: merge .sig + archives into rolling latest.json.
   # Skips cleanly when updater secrets were never used (no .sig on the release).
