@@ -47,6 +47,19 @@ See `docs/llm-wiki/release.md`.
 - 文件路径如果不是文字，整段对话不再因此变空白。
 - 已经做完的工具回合，切换对话时不再显示成应用重启。
 
+## [0.2.40] - 2026-10-10
+
+### Added
+- A phone or browser mirror can preview chat images and video.
+
+**中文 · 新增**
+- 手机或浏览器镜像端可以预览聊天里的图片与视频。
+
+### Fixed
+- The LAN link no longer points at a VPN or proxy adapter address.
+
+**中文 · 修复**
+- 局域网链接不再指向 VPN / 代理虚拟网卡的地址。
 ## [0.2.39] - 2026-10-06
 
 > **Highlight:** Goal mode reaches the CLI, and a stalled reply can continue in the same chat.
