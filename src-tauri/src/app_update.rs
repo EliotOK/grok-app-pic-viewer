@@ -19,9 +19,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 const DEFAULT_RELEASES_API_URL: &str =
-    "https://api.github.com/repos/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_HTML_URL: &str = "https://github.com/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_PAGE: &str = "https://github.com/RongleCat/grok-app/releases";
+    "https://api.github.com/repos/EliotOK/grok-app-pic-viewer/releases/latest";
+const DEFAULT_RELEASES_HTML_URL: &str =
+    "https://github.com/EliotOK/grok-app-pic-viewer/releases/latest";
+const DEFAULT_RELEASES_PAGE: &str = "https://github.com/EliotOK/grok-app-pic-viewer/releases";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(12);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);

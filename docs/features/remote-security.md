@@ -1,6 +1,8 @@
 # Remote control security
 
 - Phone mirror defaults to **read-only**; enable “Allow phone to send” for writes (in-app confirm + persistent warning banner while write is on).
+- The desktop retains the chosen write policy, LAN access, client limit, pairing token, and port in its private `mirror-host.json`. A running host resumes after app restart; explicitly stopping it disables that startup recovery. New installations remain stopped, local-only, and read-only.
+- Pairing survives desktop restarts on the same LAN address. Regenerating the link replaces the saved token and disconnects old clients. An occupied saved port produces an error rather than changing the pairing URL. Quick-tunnel public hostnames may still change after a restart.
 - Phone mirror HTTP **defaults to loopback** (`127.0.0.1`). Same-LAN access is opt-in (“Allow same Wi-Fi”, in-app confirm) and rebinds `0.0.0.0`; copy/QR then use the detected LAN IPv4. Token path still required; HTTP stays unencrypted.
 - While write is on, the Connect panel lists **allowlisted write RPC categories** and shows a **broad-surface** warning (full allowlist is open; filesystem / desktop-only commands stay blocked).
 - Optional **max phone clients** (1–16, default 4): extra WebSocket upgrades get HTTP 503 (soft-fail). Connect panel shows a live cap bar/chip, full/near-full honesty, zero-client empty state when host is up, and never invents clients while stopped.

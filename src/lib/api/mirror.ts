@@ -22,7 +22,7 @@ export type MirrorStatus = {
   localPort: number | null;
   /**
    * Full token while host is running (QR / copy). Memory-only —
-   * never persist to localStorage, audit logs, or support bundles.
+   * stored only by the desktop host; never include in localStorage, audit logs, or support bundles.
    */
   token: string | null;
   /** Last 6 chars of token for safe display. */

@@ -1,0 +1,51 @@
+name: Remote stability build
+
+on:
+  push:
+    branches: ["codex/remote-stability"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-stability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      VITE_GROK_RELEASES_URL: https://github.com/EliotOK/grok-app-pic-viewer/releases/latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: Windows-x64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm lint
+      - run: python scripts/check-code-quality-gates.py --mode final
+      - run: cargo fmt --all -- --check
+        working-directory: src-tauri
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+      - name: Mirror restart and update tests
+        run: ./scripts/test-remote-stability-windows.ps1
+      - name: Build Windows installer
+        run: pnpm tauri build --config src-tauri/tauri.windows.conf.json --bundles nsis --no-sign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grok-app-remote-stability-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14

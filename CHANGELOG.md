@@ -47,6 +47,18 @@ See `docs/llm-wiki/release.md`.
 - 文件路径如果不是文字，整段对话不再因此变空白。
 - 已经做完的工具回合，切换对话时不再显示成应用重启。
 
+## [0.2.41] - 2026-10-16
+
+### Fixed
+- Remote pairing and access settings survive desktop restarts.
+- A failed phone connection settles promptly and can reconnect.
+- Update checks and downloads use this fork's GitHub releases.
+
+**中文 · 修复**
+- 桌面端重启后保留远程配对链接与访问设置。
+- 手机首次连接失败后能结束等待并重新连接。
+- 更新检查与下载使用当前定制仓库的发布版本。
+
 ## [0.2.40] - 2026-10-10
 
 ### Added

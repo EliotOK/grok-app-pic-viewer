@@ -64,7 +64,7 @@ const BACKGROUND_BLOCKED_STATES = new Set<UpdateStatus["state"]>([
 /** Override via VITE_GROK_RELEASES_URL when the repo path differs. */
 const GITHUB_RELEASES_URL =
   (import.meta.env.VITE_GROK_RELEASES_URL as string | undefined) ||
-  "https://github.com/RongleCat/grok-app/releases/latest";
+  "https://github.com/EliotOK/grok-app-pic-viewer/releases/latest";
 
 function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

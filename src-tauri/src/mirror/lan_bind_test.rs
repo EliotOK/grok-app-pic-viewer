@@ -21,6 +21,7 @@ fn test_host(token: &str, dist: PathBuf, allow_lan: bool) -> Arc<MirrorHost> {
             allow_lan,
         }),
         hub: Arc::new(ws::WsHub::new()),
+        preferences_path: None,
     })
 }
 

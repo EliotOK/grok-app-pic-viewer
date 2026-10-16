@@ -12,6 +12,7 @@ export type MirrorBoot = {
 declare global {
   interface Window {
     __MIRROR__?: MirrorBoot;
+    __GROK_MIRROR_HEALTH__?: { connection: "connecting" | "open" | "closed" };
   }
 }
 
@@ -193,6 +194,7 @@ export function mirrorEnsureTransport(): Promise<void> {
 
     const ws = new WebSocket(url);
     state.ws = ws;
+    window.__GROK_MIRROR_HEALTH__ = { connection: "connecting" };
 
     const failPending = (reason: string) => {
       for (const [, p] of state.pending) {
@@ -208,6 +210,7 @@ export function mirrorEnsureTransport(): Promise<void> {
       }
       const resumed = state.hello !== null;
       state.connectPromise = null;
+      window.__GROK_MIRROR_HEALTH__ = { connection: "open" };
       resolve();
       // A reconnect can follow a server-side lag reset. The event ring is not
       // replayable, so let the host-event hook rehydrate state/journal after
@@ -224,13 +227,16 @@ export function mirrorEnsureTransport(): Promise<void> {
     };
 
     ws.onclose = () => {
+      reject(new Error("mirror websocket closed before connection"));
+      if (gen !== state.gen) return;
+      window.__GROK_MIRROR_HEALTH__ = { connection: "closed" };
       if (state.ws === ws) state.ws = null;
       state.connectPromise = null;
       failPending("mirror websocket closed");
       // Auto-reconnect if not intentionally closed (StrictMode / nav).
       if (!state.closed && isMirrorClient()) {
         window.setTimeout(() => {
-          if (!state.closed) void mirrorEnsureTransport();
+          if (!state.closed) void mirrorEnsureTransport().catch(() => {});
         }, 400);
       }
     };
@@ -258,6 +264,9 @@ export function mirrorCloseTransport(): void {
   state.gen += 1;
   const ws = state.ws;
   state.ws = null;
+  if (typeof window !== "undefined") {
+    window.__GROK_MIRROR_HEALTH__ = { connection: "closed" };
+  }
   state.connectPromise = null;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     try {
