@@ -104,6 +104,8 @@ export interface ChatMessage {
   toolStatus?: string;
   /** Turn failed (retries exhausted / provider error) — show as chat error record. */
   isError?: boolean;
+  /** Redacted provider response available from the error row's Details control. */
+  errorDetail?: string;
   /** Local file/folder refs shown as cards (also embedded as @path for agent). */
   attachments?: MessageAttachment[];
   /** ISO timestamp when the message was created (for hover footer). */

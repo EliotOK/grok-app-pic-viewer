@@ -727,11 +727,12 @@ export function resolveErrorDeckCode(
   if (looksLikeRateLimit(message)) {
     return "RATE_LIMITED";
   }
-  const fromCode = deckCodeFromAgent(code, opts);
-  if (["AGENT_CRASHED", "NETWORK_PROVIDER", "AUTH_FAILED", "GENERIC"].includes(fromCode)) {
+  if (code === "REQUEST_REJECTED" || code === "SERVICE_UNAVAILABLE") return code;
+  if (["AGENT_CRASHED", "NETWORK_PROVIDER", "AUTH_FAILED", "GENERIC"].includes(code ?? "GENERIC")) {
     const providerCode = providerErrorCode(message);
     if (providerCode) return providerCode;
   }
+  const fromCode = deckCodeFromAgent(code, opts);
   // Host often emits plain AUTH_FAILED — refine with message + active route.
   if (fromCode === "AUTH_FAILED") {
     return refineAuthDeckCode(message ?? code, opts);

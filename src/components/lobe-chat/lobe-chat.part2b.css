@@ -385,6 +385,18 @@
   opacity: 0.85;
 }
 
+.lobe-chat-error__details {
+  margin-top: 4px;
+}
+
+.lobe-chat-error__details .error-banner__details-btn {
+  color: inherit;
+}
+
+.lobe-chat-error__details .error-banner__detail {
+  border-color: color-mix(in srgb, var(--chat-text, #fff) 10%, transparent);
+}
+
 /* Legacy label kept for find-hit styles; no longer painted red. */
 .lobe-chat-error__label {
   display: none;

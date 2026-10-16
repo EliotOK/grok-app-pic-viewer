@@ -1,5 +1,6 @@
 import { t, type Locale } from "../../i18n";
 import { stripAnsi } from "../ansi";
+import { providerErrorDetail } from "../providerErrors";
 import {
   buildErrorDeck,
   isAuthDeckCode,
@@ -33,6 +34,7 @@ export function applyTurnError(
   locale: Locale = "en",
 ): ChatMessage[] {
   const content = formatTurnErrorBody(payload, locale);
+  const errorDetail = providerErrorDetail(payload.message || payload.content, payload.code) ?? undefined;
   const mid = payload.messageId || "";
 
   let idx = mid ? messages.findIndex((m) => m.id === mid) : -1;
@@ -73,6 +75,7 @@ export function applyTurnError(
           content,
           streaming: false,
           isError: true,
+          errorDetail,
         };
       } else {
         next.push({
@@ -81,6 +84,7 @@ export function applyTurnError(
           content,
           streaming: false,
           isError: true,
+          errorDetail,
         });
       }
       return next.map((m, i) =>
@@ -94,6 +98,7 @@ export function applyTurnError(
       thought: undefined,
       streaming: false,
       isError: true,
+      errorDetail,
     };
     // Clear any other lingering streaming flags
     return next.map((m, i) =>
@@ -109,6 +114,7 @@ export function applyTurnError(
       content,
       streaming: false,
       isError: true,
+      errorDetail,
     },
   ];
 }
@@ -367,7 +373,7 @@ export function presentErrorBanner(
     const deck = buildErrorDeck(deckCode, locale);
     // Prefer refined deck code on the banner (AUTH_NO_CONTEXT etc.) when Host
     // only sent AUTH_FAILED — still keep raw host code out of the way.
-    return bannerFromDeck(deck, deckCode === "GENERIC" ? error.code : deckCode, null);
+    return bannerFromDeck(deck, deckCode === "GENERIC" ? error.code : deckCode, providerErrorDetail(error.message, deckCode));
   }
   if (!localError?.trim()) return null;
 
@@ -386,7 +392,7 @@ export function presentErrorBanner(
       activeSource: opts?.activeSource,
     });
     const deck = buildErrorDeck(deckCode, locale);
-    return bannerFromDeck(deck, deckCode === "GENERIC" ? code : deckCode, null);
+    return bannerFromDeck(deck, deckCode === "GENERIC" ? code : deckCode, providerErrorDetail(rest, deckCode));
   }
 
   const summary = formatTurnErrorBody(
@@ -412,8 +418,8 @@ export function presentErrorBanner(
   const classified = resolveErrorDeckCode(null, cleaned, opts);
   if (classified !== "GENERIC") {
     const deck = buildErrorDeck(classified, locale);
-    if (isAuthDeckCode(classified)) {
-      return bannerFromDeck(deck, classified, null);
+    if (isAuthDeckCode(classified) || classified === "REQUEST_REJECTED" || classified === "SERVICE_UNAVAILABLE") {
+      return bannerFromDeck(deck, classified, providerErrorDetail(cleaned, classified));
     }
     const short =
       cleaned.length > 200 ? `${cleaned.slice(0, 200)}…` : cleaned;

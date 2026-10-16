@@ -54,11 +54,11 @@ See `docs/llm-wiki/release.md`.
 > **中文 · 亮点：** 模型服务出错时显示准确原因与处理入口。
 
 ### Fixed
-- Requests rejected by the model service show their own error and diagnostic actions.
+- Requests rejected by the model service show their own error and diagnostic actions. Details includes the redacted service response.
 - Temporary authentication service errors are reported as service outages.
 
 **中文 · 修复**
-- 模型服务拒绝请求时，显示独立的错误说明和诊断入口。
+- 模型服务拒绝请求时，显示独立的错误说明和诊断入口。详情保留脱敏后的服务端响应。
 - 认证服务暂时不可用时，准确显示服务异常。
 
 ## [0.2.42] - 2026-10-16

@@ -1,3 +1,6 @@
+import { stripAnsi } from "./ansi";
+import { redact } from "./redact";
+
 /** Status carried by a provider response or structured CLI RPC error. */
 export function providerHttpStatus(message: string | null | undefined): number | null {
   const raw = message ?? "";
@@ -12,4 +15,15 @@ export function providerErrorCode(message: string | null | undefined) {
   if (status === 403) return "REQUEST_REJECTED";
   if (status !== null && status >= 500) return "SERVICE_UNAVAILABLE";
   return null;
+}
+
+/** Bounded diagnostic text for provider failures, with credentials removed. */
+export function providerErrorDetail(message: string | null | undefined, code?: string | null): string | null {
+  if (!message?.trim()) return null;
+  if (code !== "REQUEST_REJECTED" && code !== "SERVICE_UNAVAILABLE" && !providerErrorCode(message)) return null;
+  const detail = redact(stripAnsi(message)).replace(
+    /((?:["']?)(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi,
+    "$1[REDACTED]",
+  );
+  return detail.length > 4000 ? `${detail.slice(0, 4000)}…` : detail;
 }

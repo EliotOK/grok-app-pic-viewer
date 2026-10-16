@@ -19,6 +19,7 @@ import {
 } from "react";
 import type { Locale } from "@/i18n";
 import { createT } from "@/i18n";
+import { ProviderErrorDetails } from "./ProviderErrorDetails";
 import {
   formatTurnErrorBody,
   isToolInlinedInAssistants,
@@ -1199,6 +1200,7 @@ const TranscriptMessageRow = memo(function TranscriptMessageRow({
             </span>
           ) : null}
         </div>
+        {m.errorDetail ? <ProviderErrorDetails detail={m.errorDetail} locale={locale} /> : null}
       </div>,
     );
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { providerErrorCode, providerHttpStatus } from "./providerErrors";
+import { providerErrorCode, providerErrorDetail, providerHttpStatus } from "./providerErrors";
 import { buildErrorDeck, classifyErrorMessage, resolveErrorDeckCode } from "./errorDeck";
-import { formatTurnErrorBody, isAgentErrorCode } from "./session/errors";
+import { applyTurnError, formatTurnErrorBody, isAgentErrorCode, presentErrorBanner } from "./session/errors";
 
 const rejected =
   'Internal error (code -32603, data: {"http_status":403,"message":"API error (status 403 Forbidden): permission-denied: I cannot help with this request."})';
@@ -56,5 +56,19 @@ describe("provider response errors", () => {
     expect(classifyErrorMessage("read_file: permission denied: 403.txt")).toBe("PERMISSION_DENIED");
     expect(resolveErrorDeckCode("AGENT_CRASHED", "Agent process exited (code 503)")).toBe("AGENT_CRASHED");
     expect(resolveErrorDeckCode("AGENT_CRASHED", "HTTP 403; bwrap: setting up uid map: Permission denied")).toBe("SANDBOX_BLOCKED");
+  });
+
+  it("keeps a redacted provider reason on both the error row and banner", () => {
+    const message = `${rejected}; api_key="opaque-secret"; Authorization: Bearer secretvalue12345`;
+    const [row] = applyTurnError([], { code: "REQUEST_REJECTED", message }, "zh");
+    const banner = presentErrorBanner({ code: "REQUEST_REJECTED", message }, null, "zh");
+    expect(row?.content).toContain("模型服务拒绝了请求");
+    expect(row?.errorDetail).toContain("permission-denied");
+    expect(row?.errorDetail).not.toMatch(/opaque-secret|secretvalue12345/);
+    expect(banner?.detail).toBe(row?.errorDetail);
+    expect(banner?.reconnectHint).toBe(false);
+    expect(presentErrorBanner({ code: "SERVICE_UNAVAILABLE", message: "HTTP 504 Gateway Timeout" }, null, "zh")?.summary).toBe("模型服务暂时不可用");
+    expect(presentErrorBanner(null, `REQUEST_REJECTED: ${message}`, "zh")?.detail).toContain("permission-denied");
+    expect(providerErrorDetail(`HTTP 503 ${"x".repeat(5000)}`)?.length).toBe(4001);
   });
 });
