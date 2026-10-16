@@ -1,8 +1,8 @@
-name: Remote stability build
+name: Repair Windows build
 
 on:
   push:
-    branches: ["codex/remote-stability"]
+    branches: ["codex/remote-stability", "codex/task-performance"]
   workflow_dispatch:
 
 permissions:

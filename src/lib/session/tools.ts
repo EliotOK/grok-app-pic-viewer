@@ -271,13 +271,13 @@ export function filterTranscriptMessages(
   messages: ChatMessage[],
 ): ChatMessage[] {
   if (!messages.length) return messages;
-  let anyInlined = false;
+  const inlinedToolIds = new Set<string>();
   let anyHostInlined = false;
   for (const m of messages) {
     if (m.role !== "assistant" || !m.segments?.length) continue;
     for (const s of m.segments) {
       if (s.kind !== "tool") continue;
-      anyInlined = true;
+      inlinedToolIds.add(s.toolCallId);
       if (hostToolFamilyKey(s.toolCallId, s.toolKind, s.title)) {
         anyHostInlined = true;
       }
@@ -290,18 +290,9 @@ export function filterTranscriptMessages(
     const fam = hostToolFamilyKey(tcid, m.toolKind, title);
     // Host vision/X: never paint a standalone row when already on an assistant.
     if (fam && anyHostInlined) return false;
-    if (fam && isToolInlinedInAssistants(messages, tcid, {
-      toolKind: m.toolKind,
-      title,
-    })) {
-      return false;
-    }
-    if (!anyInlined) return true;
-    if (!tcid) return true;
-    return !isToolInlinedInAssistants(messages, tcid, {
-      toolKind: m.toolKind,
-      title,
-    });
+    const id = tcid.trim();
+    if (!id) return true;
+    return !inlinedToolIds.has(id);
   });
 }
 
