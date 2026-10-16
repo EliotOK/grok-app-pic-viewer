@@ -47,6 +47,20 @@ See `docs/llm-wiki/release.md`.
 - 文件路径如果不是文字，整段对话不再因此变空白。
 - 已经做完的工具回合，切换对话时不再显示成应用重启。
 
+## [0.2.43] - 2026-10-16
+
+> **Highlight:** Model service errors show accurate recovery guidance.
+>
+> **中文 · 亮点：** 模型服务出错时显示准确原因与处理入口。
+
+### Fixed
+- Requests rejected by the model service show their own error and diagnostic actions.
+- Temporary authentication service errors are reported as service outages.
+
+**中文 · 修复**
+- 模型服务拒绝请求时，显示独立的错误说明和诊断入口。
+- 认证服务暂时不可用时，准确显示服务异常。
+
 ## [0.2.42] - 2026-10-16
 
 ### Fixed

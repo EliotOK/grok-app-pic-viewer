@@ -4,7 +4,8 @@
 
 ## 目标
 
-- 每次正式版 = **一个 git tag `vX.Y.Z`** + **GitHub Release** + **多平台安装包**  
+- 本仓库正式版默认发布 **一个 git tag `vX.Y.Z`** + **GitHub Release** + **Windows x64 安装包与绿色版**。手动工作流可选择其他平台。
+  可选平台产物：
   - macOS Apple Silicon (`aarch64` `.dmg`)  
   - macOS Intel (`x64` `.dmg`)  
   - Windows x64 安装版 (`*-setup.exe`) + **绿色版** (`*-portable.zip`)  
@@ -181,7 +182,7 @@ git push origin vX.Y.Z
 | 工作流 | 触发 | 作用 |
 |--------|------|------|
 | `.github/workflows/ci.yml` | push/PR → main | typecheck、test、`build:ui`、mac/win `cargo test` |
-| `.github/workflows/release.yml` | tag `v*` 或手动 | 矩阵：mac×2 + win（setup+portable）+ linux（AppImage/deb/rpm）→ 同一 Release |
+| `.github/workflows/release.yml` | tag `v*` 或手动 | tag 默认 Windows（setup+portable）；手动可选择 macOS、Linux 或全部平台 |
 
 Release job 关键：
 

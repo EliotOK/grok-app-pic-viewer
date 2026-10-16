@@ -12,6 +12,10 @@ pub enum AgentErrorCode {
     AuthFailed,
     /// DNS / timeout / provider 5xx / model 404.
     NetworkProvider,
+    /// Model service rejected this request (HTTP 403).
+    RequestRejected,
+    /// Model service returned a server error (HTTP 5xx).
+    ServiceUnavailable,
     /// Process died or protocol crashed.
     AgentCrashed,
     /// Quota / rate limit / insufficient credits.
@@ -36,6 +40,8 @@ impl AgentErrorCode {
             Self::CliNotFound => "CLI_NOT_FOUND",
             Self::AuthFailed => "AUTH_FAILED",
             Self::NetworkProvider => "NETWORK_PROVIDER",
+            Self::RequestRejected => "REQUEST_REJECTED",
+            Self::ServiceUnavailable => "SERVICE_UNAVAILABLE",
             Self::AgentCrashed => "AGENT_CRASHED",
             Self::QuotaExceeded => "QUOTA_EXCEEDED",
             Self::ConnectFailed => "CONNECT_FAILED",
@@ -44,6 +50,44 @@ impl AgentErrorCode {
             Self::SandboxBlocked => "SANDBOX_BLOCKED",
         }
     }
+}
+
+/// Extract a provider HTTP status from CLI text or structured RPC error data.
+pub fn provider_http_status(message: &str) -> Option<u16> {
+    let lower = message.to_ascii_lowercase();
+    for marker in [
+        "http_status",
+        "status_code",
+        "status code",
+        "status",
+        "http/1.1",
+        "http/2",
+        "http",
+    ] {
+        for (offset, _) in lower.match_indices(marker) {
+            if offset > 0 {
+                let previous = lower.as_bytes()[offset - 1];
+                if previous.is_ascii_alphanumeric() || previous == b'_' {
+                    continue;
+                }
+            }
+            let value = lower[offset + marker.len()..].trim_start_matches(|c: char| {
+                c.is_ascii_whitespace() || matches!(c, '"' | '\'' | ':' | '=')
+            });
+            let bytes = value.as_bytes();
+            if bytes.len() < 3 || !bytes[..3].iter().all(u8::is_ascii_digit) {
+                continue;
+            }
+            if bytes.get(3).is_some_and(u8::is_ascii_digit) {
+                continue;
+            }
+            let status: u16 = value[..3].parse().ok()?;
+            if (400..600).contains(&status) {
+                return Some(status);
+            }
+        }
+    }
+    None
 }
 
 /// True when stderr / RPC text indicates bubblewrap / unprivileged user-namespace
@@ -95,11 +139,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn provider_status_requires_an_http_marker() {
+        for (message, expected) in [
+            (r#"{"http_status":403}"#, Some(403)),
+            (r#"{"status_code":504}"#, Some(504)),
+            ("API error (status 503 Service Unavailable)", Some(503)),
+            ("HTTP/1.1 502 Bad Gateway", Some(502)),
+            ("status code: 500", Some(500)),
+            ("file 403.txt: permission denied", None),
+            ("Agent process exited (code 503)", None),
+            ("status 5030", None),
+        ] {
+            assert_eq!(provider_http_status(message), expected, "{message}");
+        }
+    }
+
+    #[test]
     fn error_codes_serialize_to_stable_names() {
         let codes = [
             AgentErrorCode::CliNotFound,
             AgentErrorCode::AuthFailed,
             AgentErrorCode::NetworkProvider,
+            AgentErrorCode::RequestRejected,
+            AgentErrorCode::ServiceUnavailable,
             AgentErrorCode::AgentCrashed,
             AgentErrorCode::QuotaExceeded,
             AgentErrorCode::ConnectFailed,
@@ -111,6 +173,8 @@ mod tests {
             "CLI_NOT_FOUND",
             "AUTH_FAILED",
             "NETWORK_PROVIDER",
+            "REQUEST_REJECTED",
+            "SERVICE_UNAVAILABLE",
             "AGENT_CRASHED",
             "QUOTA_EXCEEDED",
             "CONNECT_FAILED",

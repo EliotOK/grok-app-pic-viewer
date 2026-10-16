@@ -24,6 +24,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Mirror tests failed' }
         & $binary 'app_update::' --test-threads=1
         if ($LASTEXITCODE -ne 0) { throw 'Update tests failed' }
+        & $binary 'acp_client::classify_rpc_error_tests' --test-threads=1
+        if ($LASTEXITCODE -ne 0) { throw 'Provider error classification tests failed' }
+        & $binary 'error::tests' --test-threads=1
+        if ($LASTEXITCODE -ne 0) { throw 'Error taxonomy tests failed' }
     }
 } finally {
     Pop-Location

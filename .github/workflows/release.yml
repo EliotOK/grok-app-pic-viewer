@@ -41,9 +41,9 @@ on:
         required: false
         default: ""
       platforms:
-        description: "Platforms to build. Tag pushes always build all of them; a manual run can pick one."
+        description: "Platforms to build. Tag pushes default to Windows; a manual run can pick another platform."
         required: false
-        default: "all"
+        default: "windows"
         type: choice
         options:
           - all
@@ -59,8 +59,8 @@ permissions:
   contents: write
 
 jobs:
-  # Tag releases build every platform (unchanged upstream behavior). A manual run
-  # may pick one, which keeps the other runners out of the queue entirely —
+  # Tag releases build Windows. A manual run can select other platforms,
+  # which keeps unselected runners out of the queue entirely —
   # a job-level `if` cannot read `matrix`, so the list is built here instead.
   plan:
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
         id: pick
         shell: bash
         env:
-          PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'all' }}
+          PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'windows' }}
         run: |
           set -euo pipefail
           macos='{"platform":"macos-latest","args":"--target aarch64-apple-darwin","name":"macOS-ARM64"},{"platform":"macos-latest","args":"--target x86_64-apple-darwin","name":"macOS-x64"}'
@@ -317,6 +317,7 @@ jobs:
           GROK_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/grok-desktop-latest/latest.json
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_GROK_RELEASES_URL: https://github.com/${{ github.repository }}/releases/latest
         with:
           # Root package.json + src-tauri/ layout (create-tauri-app style)
           projectPath: .
@@ -330,6 +331,7 @@ jobs:
           # GROK_UPDATER_* env (above) enables build.rs registration cfg.
           args: >-
             ${{ matrix.args }}
+            ${{ matrix.platform == 'windows-latest' && ' --config src-tauri/tauri.windows.conf.json' || '' }}
             ${{ steps.updater.outputs.enabled == 'true' && ' --config src-tauri/tauri.release.conf.json' || '' }}
             ${{ matrix.platform == 'windows-latest' && steps.win_sign.outputs.enabled == 'true' && ' --config src-tauri/tauri.windows.sign.conf.json' || '' }}
           # We assemble a multi-platform latest.json in assemble-updater-manifest.

@@ -116,6 +116,8 @@ const KNOWN_ERROR_CODES: AgentErrorCode[] = [
   "CLI_NOT_FOUND",
   "AUTH_FAILED",
   "NETWORK_PROVIDER",
+  "REQUEST_REJECTED",
+  "SERVICE_UNAVAILABLE",
   "AGENT_CRASHED",
   "QUOTA_EXCEEDED",
   "CONNECT_FAILED",
@@ -159,10 +161,10 @@ export function streamFlapCopy(locale: Locale = "en"): string {
 }
 
 const AGENT_ERROR_CODE_RE =
-  /^(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|SANDBOX_BLOCKED)(?::\s*|\s+)([\s\S]*)$/;
+  /^(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|REQUEST_REJECTED|SERVICE_UNAVAILABLE|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|SANDBOX_BLOCKED)(?::\s*|\s+)([\s\S]*)$/;
 
 const MARKDOWN_CODE_RE =
-  /^\*\*(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|SANDBOX_BLOCKED)\*\*(?:\s*[\r\n]+([\s\S]*))?$/;
+  /^\*\*(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|REQUEST_REJECTED|SERVICE_UNAVAILABLE|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|SANDBOX_BLOCKED)\*\*(?:\s*[\r\n]+([\s\S]*))?$/;
 
 export { stripAnsi };
 
@@ -229,7 +231,7 @@ export function formatTurnErrorBody(
   // custom route) get honest bubble copy instead of the generic 401 line.
   // Pass rawCombined so bwrap/userns in "; stderr: …" survives stripErrorNoise.
   const deckish = resolveErrorDeckCode(code, `${rawCombined}\n${rest}\n${cleaned}`, opts);
-  if (isAuthDeckCode(deckish) || deckish === "PERMISSION_DENIED" || deckish === "MCP_AUTH_FAILED" || deckish === "OAUTH_EXPIRED" || deckish === "WORKSPACE_UNTRUSTED" || deckish === "PROJECT_MISSING" || deckish === "SANDBOX_BLOCKED" || deckish === "QUOTA_EXCEEDED" || deckish === "RATE_LIMITED") {
+  if (isAuthDeckCode(deckish) || deckish === "REQUEST_REJECTED" || deckish === "SERVICE_UNAVAILABLE" || deckish === "PERMISSION_DENIED" || deckish === "MCP_AUTH_FAILED" || deckish === "OAUTH_EXPIRED" || deckish === "WORKSPACE_UNTRUSTED" || deckish === "PROJECT_MISSING" || deckish === "SANDBOX_BLOCKED" || deckish === "QUOTA_EXCEEDED" || deckish === "RATE_LIMITED") {
     return errorCopyFromDeck(deckish, locale);
   }
 

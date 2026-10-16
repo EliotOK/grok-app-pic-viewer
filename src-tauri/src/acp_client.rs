@@ -4970,6 +4970,11 @@ fn classify_rpc_error(e: &str) -> AgentError {
     if is_terminal_quota_reason(e) {
         return AgentError::new(AgentErrorCode::QuotaExceeded, humanize_quota_reason(e));
     }
+    match crate::error::provider_http_status(e) {
+        Some(403) => return AgentError::new(AgentErrorCode::RequestRejected, e),
+        Some(500..=599) => return AgentError::new(AgentErrorCode::ServiceUnavailable, e),
+        _ => {}
+    }
     let lower = e.to_lowercase();
     if lower.contains("quota")
         || lower.contains("rate limit")
@@ -5053,6 +5058,23 @@ mod classify_rpc_error_tests {
     use super::*;
 
     #[test]
+    fn provider_refusal_preserves_reason_and_is_request_rejected() {
+        let msg = r#"Internal error (code -32603, data: {"http_status":403,"message":"API error (status 403 Forbidden): permission-denied: I'm sorry, I can't help with that request."})"#;
+        let error = classify_rpc_error(msg);
+        assert_eq!(error.code, AgentErrorCode::RequestRejected);
+        assert_eq!(error.message, msg);
+    }
+
+    #[test]
+    fn temporary_authentication_service_error_is_service_unavailable() {
+        let msg = "API error (status 503 Service Unavailable): unavailable: Authentication is temporarily unavailable. Please retry.";
+        assert_eq!(
+            classify_rpc_error(msg).code,
+            AgentErrorCode::ServiceUnavailable
+        );
+    }
+
+    #[test]
     fn xai_incorrect_api_key_http_400_is_auth_not_crash() {
         // Support: CharlieLam 2026-08-05 — xAI returns 400 + "Incorrect API key"
         // (no "auth" / "401" substring). Must not land on AgentCrashed.
@@ -5100,13 +5122,13 @@ mod classify_rpc_error_tests {
     }
 
     #[test]
-    fn provider_502_is_network() {
+    fn provider_502_is_service_unavailable() {
         assert_eq!(
             classify_rpc_error(
                 "API error (status 502 Bad Gateway): upstream_error: Upstream service temporarily unavailable"
             )
             .code,
-            AgentErrorCode::NetworkProvider
+            AgentErrorCode::ServiceUnavailable
         );
     }
 

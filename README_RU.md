@@ -316,7 +316,7 @@ Windows (необязательно): дважды щёлкните [`install-la
 ## 👥 Участники
 
 <!-- CONTRIBUTORS:START -->
-Спасибо всем, кто внёс вклад в Grok App. Все участники GitHub — люди (по числу коммитов, обновлено 2026-10-06).
+Спасибо всем, кто внёс вклад в Grok App. Все участники GitHub — люди (по числу коммитов, обновлено 2026-10-16).
 
 <p align="center">
   <a href="https://github.com/RongleCat" title="RongleCat"><img src="https://github.com/RongleCat.png?size=96" width="72" height="72" alt="RongleCat" style="border-radius:50%" /></a>
@@ -331,6 +331,7 @@ Windows (необязательно): дважды щёлкните [`install-la
   <a href="https://github.com/Yy-702" title="Yy-702"><img src="https://github.com/Yy-702.png?size=96" width="72" height="72" alt="Yy-702" style="border-radius:50%" /></a>
   <a href="https://github.com/erict16" title="erict16"><img src="https://github.com/erict16.png?size=96" width="72" height="72" alt="erict16" style="border-radius:50%" /></a>
   <a href="https://github.com/enderzcx" title="enderzcx"><img src="https://github.com/enderzcx.png?size=96" width="72" height="72" alt="enderzcx" style="border-radius:50%" /></a>
+  <a href="https://github.com/BoringLink" title="BoringLink"><img src="https://github.com/BoringLink.png?size=96" width="72" height="72" alt="BoringLink" style="border-radius:50%" /></a>
   <a href="https://github.com/jason920612" title="jason920612"><img src="https://github.com/jason920612.png?size=96" width="72" height="72" alt="jason920612" style="border-radius:50%" /></a>
   <a href="https://github.com/oykb58246" title="oykb58246"><img src="https://github.com/oykb58246.png?size=96" width="72" height="72" alt="oykb58246" style="border-radius:50%" /></a>
   <a href="https://github.com/ChenYCL" title="ChenYCL"><img src="https://github.com/ChenYCL.png?size=96" width="72" height="72" alt="ChenYCL" style="border-radius:50%" /></a>

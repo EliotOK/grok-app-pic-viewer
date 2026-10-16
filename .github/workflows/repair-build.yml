@@ -2,7 +2,7 @@ name: Repair Windows build
 
 on:
   push:
-    branches: ["codex/remote-stability", "codex/task-performance"]
+    branches: ["codex/remote-stability", "codex/task-performance", "codex/provider-errors"]
   workflow_dispatch:
 
 permissions:
@@ -49,7 +49,7 @@ jobs:
         working-directory: src-tauri
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: src-tauri
-      - name: Mirror restart and update tests
+      - name: Windows runtime regression tests
         run: ./scripts/test-remote-stability-windows.ps1
       - name: Build Windows installer
         run: pnpm tauri build --config src-tauri/tauri.windows.conf.json --bundles nsis --no-sign

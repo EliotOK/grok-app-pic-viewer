@@ -6,6 +6,7 @@
  */
 
 import { createT, type Locale, type MessageKey } from "@/i18n";
+import { providerErrorCode } from "./providerErrors";
 
 /** What the banner / toast buttons should do. */
 export type ErrorDeckActionId =
@@ -50,6 +51,8 @@ export type ErrorDeckCode =
   /** Active custom provider route rejected credentials (re-login alone will not fix). */
   | "AUTH_CUSTOM_PROVIDER"
   | "NETWORK_PROVIDER"
+  | "REQUEST_REJECTED"
+  | "SERVICE_UNAVAILABLE"
   | "AGENT_CRASHED"
   | "QUOTA_EXCEEDED"
   /** Transient 429 / “slow down” — not included-usage exhaustion. */
@@ -154,6 +157,22 @@ const DECK: Record<ErrorDeckCode, DeckSpec> = {
     primaryLabel: "error.action.reconnect",
     secondaryId: "open_network",
     secondaryLabel: "error.action.openNetwork",
+  },
+  REQUEST_REJECTED: {
+    problem: "error.deck.rejected.problem",
+    cause: "error.deck.rejected.cause",
+    primaryId: "open_doctor",
+    primaryLabel: "error.action.openDoctor",
+    secondaryId: "dismiss",
+    secondaryLabel: "error.action.dismiss",
+  },
+  SERVICE_UNAVAILABLE: {
+    problem: "error.deck.unavailable.problem",
+    cause: "error.deck.unavailable.cause",
+    primaryId: "dismiss",
+    primaryLabel: "error.action.dismiss",
+    secondaryId: "open_doctor",
+    secondaryLabel: "error.action.openDoctor",
   },
   AGENT_CRASHED: {
     problem: "error.deck.crash.problem",
@@ -311,6 +330,8 @@ const AGENT_DECK_CODES: ErrorDeckCode[] = [
   "AUTH_API_KEY",
   "AUTH_CUSTOM_PROVIDER",
   "NETWORK_PROVIDER",
+  "REQUEST_REJECTED",
+  "SERVICE_UNAVAILABLE",
   "AGENT_CRASHED",
   "QUOTA_EXCEEDED",
   "RATE_LIMITED",
@@ -571,6 +592,9 @@ export function classifyErrorMessage(raw: string | null | undefined): ErrorDeckC
     return "MCP_AUTH_FAILED";
   }
 
+  const providerCode = providerErrorCode(raw);
+  if (providerCode) return providerCode;
+
   // ── Tool / FS permission (not account 401) ──
   // CLI rejects Host optionId → mid-turn cancel (#523 / #542 / #544). Surface
   // as permission recovery (open Permissions), not a silent end_turn.
@@ -704,6 +728,10 @@ export function resolveErrorDeckCode(
     return "RATE_LIMITED";
   }
   const fromCode = deckCodeFromAgent(code, opts);
+  if (["AGENT_CRASHED", "NETWORK_PROVIDER", "AUTH_FAILED", "GENERIC"].includes(fromCode)) {
+    const providerCode = providerErrorCode(message);
+    if (providerCode) return providerCode;
+  }
   // Host often emits plain AUTH_FAILED — refine with message + active route.
   if (fromCode === "AUTH_FAILED") {
     return refineAuthDeckCode(message ?? code, opts);
