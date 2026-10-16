@@ -19,9 +19,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 const DEFAULT_RELEASES_API_URL: &str =
-    "https://api.github.com/repos/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_HTML_URL: &str = "https://github.com/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_PAGE: &str = "https://github.com/RongleCat/grok-app/releases";
+    "https://api.github.com/repos/EliotOK/grok-app-pic-viewer/releases/latest";
+const DEFAULT_RELEASES_HTML_URL: &str =
+    "https://github.com/EliotOK/grok-app-pic-viewer/releases/latest";
+const DEFAULT_RELEASES_PAGE: &str = "https://github.com/EliotOK/grok-app-pic-viewer/releases";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(12);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -270,6 +271,16 @@ fn build_check_from_tag(current_version: &str, tag: &str, html_url: &str) -> App
     }
 }
 
+fn release_tag_url(latest_url: &str, tag: &str) -> Option<String> {
+    let mut url = url::Url::parse(latest_url).ok()?;
+    let releases_path = url.path().strip_suffix("/latest")?;
+    let tag_path = format!("{releases_path}/tag/{tag}");
+    url.set_path(&tag_path);
+    url.set_query(None);
+    url.set_fragment(None);
+    Some(url.into())
+}
+
 fn is_allowed_update_url(url: &str) -> bool {
     url.starts_with("https://")
         || url.starts_with("http://127.0.0.1")
@@ -364,7 +375,7 @@ async fn fetch_via_html_redirect(
     current_version: &str,
 ) -> Result<AppUpdateCheck, String> {
     let ua = format!(
-        "GrokApp/{current_version} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
+        "GrokApp/{current_version} (desktop; check-update; +https://github.com/EliotOK/grok-app-pic-viewer)"
     );
 
     // 1) Prefer Location header without downloading the HTML body.
@@ -399,13 +410,9 @@ async fn fetch_via_html_redirect(
         if let Some(idx) = body.find("/releases/tag/") {
             let slice: String = body[idx..].chars().take(80).collect();
             if let Some(tag) = extract_tag_from_release_url(&format!("https://github.com{slice}")) {
-                let tag_path = if tag.starts_with('v') || tag.starts_with('V') {
-                    tag.clone()
-                } else {
-                    format!("v{tag}")
-                };
-                let html = format!("https://github.com/RongleCat/grok-app/releases/tag/{tag_path}");
-                return Ok(build_check_from_tag(current_version, &tag, &html));
+                if let Some(html) = release_tag_url(latest_url, &tag) {
+                    return Ok(build_check_from_tag(current_version, &tag, &html));
+                }
             }
         }
     }
@@ -443,7 +450,7 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     }
 
     let ua = format!(
-        "GrokApp/{current} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
+        "GrokApp/{current} (desktop; check-update; +https://github.com/EliotOK/grok-app-pic-viewer)"
     );
     let client = http_client(&ua)?;
 
@@ -609,5 +616,21 @@ mod tests {
         assert!(c.update_available);
         assert_eq!(c.latest_version, "0.1.7");
         assert!(c.asset_names.is_empty());
+    }
+
+    #[test]
+    fn html_fallback_preserves_the_selected_repository_and_tag() {
+        assert_eq!(
+            release_tag_url(DEFAULT_RELEASES_HTML_URL, "v0.2.41").as_deref(),
+            Some("https://github.com/EliotOK/grok-app-pic-viewer/releases/tag/v0.2.41")
+        );
+        assert_eq!(
+            release_tag_url(
+                "https://github.com/example/custom/releases/latest?x=1",
+                "1.2.3"
+            )
+            .as_deref(),
+            Some("https://github.com/example/custom/releases/tag/1.2.3")
+        );
     }
 }

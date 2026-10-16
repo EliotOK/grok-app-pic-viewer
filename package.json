@@ -1,17 +1,17 @@
 {
   "name": "grok-app",
   "private": true,
-  "version": "0.2.40",
+  "version": "0.2.41",
   "description": "Desktop workbench for Grok Build CLI (English-first)",
   "author": "RongleCat",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RongleCat/grok-app.git"
+    "url": "https://github.com/EliotOK/grok-app-pic-viewer.git"
   },
   "homepage": "https://grok-app.com",
   "bugs": {
-    "url": "https://github.com/RongleCat/grok-app/issues"
+    "url": "https://github.com/EliotOK/grok-app-pic-viewer/issues"
   },
   "type": "module",
   "packageManager": "pnpm@9.15.9",

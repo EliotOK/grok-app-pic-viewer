@@ -99,7 +99,9 @@ fn default_route_ipv4() -> Option<Ipv4Addr> {
 fn alias_is_virtual(alias: &str) -> bool {
     const NEEDLES: &str = "clash mihomo tailscale zerotier wireguard openvpn vethernet \
                            hyper-v wsl docker vmware virtualbox loopback bluetooth npcap";
-    NEEDLES.split_whitespace().any(|needle| alias.contains(needle))
+    NEEDLES
+        .split_whitespace()
+        .any(|needle| alias.contains(needle))
 }
 
 /// Enumerate adapters and pick the best phone-reachable IPv4.
@@ -233,7 +235,10 @@ mod tests {
         assert_eq!(display_host(true, None), "127.0.0.1");
         assert_eq!(display_host(true, Some(Ipv4Addr::LOCALHOST)), "127.0.0.1");
         // A TUN address is never advertised even when detection slipped through.
-        assert_eq!(display_host(true, Some(Ipv4Addr::new(198, 18, 0, 1))), "127.0.0.1");
+        assert_eq!(
+            display_host(true, Some(Ipv4Addr::new(198, 18, 0, 1))),
+            "127.0.0.1"
+        );
     }
 
     #[test]

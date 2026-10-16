@@ -206,7 +206,7 @@ export type MirrorConnectPanelProps = {
    */
   variant?: "modal" | "inline";
   /**
-   * Modal: panel open. Inline: when true (default), poll + auto-start while mounted.
+   * Modal: panel open. Inline: when true (default), poll while mounted.
    * Set false to pause without unmounting.
    */
   open?: boolean;
@@ -221,8 +221,8 @@ export type MirrorConnectPanelProps = {
   onRequestConfirm: (opts: MirrorConfirmRequest) => void;
   showToast: (msg: string, ms?: number) => void;
   /**
-   * Inline only: auto-start host when the panel becomes active (default true).
-   * Modal always auto-starts on open.
+   * Explicitly auto-start the host when the panel becomes active (default false).
+   * Saved startup recovery is owned by the desktop host.
    */
   autoStart?: boolean;
 };
@@ -960,7 +960,7 @@ export function MirrorConnectPanel({
   locale,
   onRequestConfirm,
   showToast,
-  autoStart = true,
+  autoStart = false,
 }: MirrorConnectPanelProps) {
   const [status, setStatus] = useState<MirrorStatus>(emptyStatus);
   const [busy, setBusy] = useState(false);

@@ -5,6 +5,7 @@
 mod auth;
 mod http;
 mod lan;
+mod preferences;
 mod rpc;
 mod tunnel;
 mod ws;
@@ -122,7 +123,7 @@ pub struct MirrorStatus {
     pub public_url: Option<String>,
     pub local_port: Option<u16>,
     /// Full token for QR / copy while host is running. Prefer publicUrl for display.
-    /// Memory-only — never persist to disk / localStorage / support bundles.
+    /// Desktop pairing secret; never include in localStorage or support bundles.
     pub token: Option<String>,
     /// Last 6 chars of token for safe display in logs / status chips.
     pub token_tail: Option<String>,
@@ -174,10 +175,11 @@ struct Inner {
     allow_lan: bool,
 }
 
-/// Process-wide mirror host (memory-only token; not persisted).
+/// Process-wide mirror host with desktop-owned pairing preferences.
 pub struct MirrorHost {
     inner: Mutex<Inner>,
     hub: Arc<ws::WsHub>,
+    preferences_path: Option<PathBuf>,
 }
 
 impl MirrorHost {
@@ -196,7 +198,56 @@ impl MirrorHost {
                 allow_lan,
             }),
             hub: Arc::new(ws::WsHub::new()),
+            preferences_path: None,
         }
+    }
+
+    pub fn from_persisted_env() -> Result<Self, String> {
+        Self::with_preferences(crate::paths::app_data_root().join("mirror-host.json"))
+    }
+
+    fn with_preferences(path: PathBuf) -> Result<Self, String> {
+        let saved = preferences::load(&path)?;
+        let mut host = Self::from_env();
+        {
+            let mut g = host.inner.lock();
+            g.env.headless |= saved.enabled;
+            if g.env.token.is_none() {
+                g.env.token = saved.token;
+            }
+            if g.env.port.is_none() {
+                g.env.port = Some(saved.port.unwrap_or(63867));
+            }
+            if std::env::var_os("GROK_MIRROR_ALLOW_LAN").is_none() {
+                g.allow_lan = saved.allow_lan;
+                g.env.allow_lan = saved.allow_lan;
+            }
+            if std::env::var_os("GROK_MIRROR_MAX_CLIENTS").is_none() {
+                g.max_clients = saved.max_clients;
+                g.env.max_clients = saved.max_clients;
+            }
+            g.read_only = saved.read_only;
+        }
+        host.preferences_path = Some(path);
+        Ok(host)
+    }
+
+    fn preferences(g: &Inner) -> preferences::Preferences {
+        preferences::Preferences {
+            enabled: g.env.headless,
+            read_only: g.read_only,
+            allow_lan: g.allow_lan,
+            max_clients: g.max_clients,
+            token: g.env.token.clone(),
+            port: g.env.port,
+        }
+    }
+
+    fn save_preferences(&self, saved: &preferences::Preferences) -> Result<(), String> {
+        if let Some(path) = &self.preferences_path {
+            preferences::save(path, saved)?;
+        }
+        Ok(())
     }
 
     pub fn hub(&self) -> Arc<ws::WsHub> {
@@ -245,9 +296,12 @@ impl MirrorHost {
         self.hub.client_count() as u32 >= max
     }
 
-    pub fn set_max_clients(&self, max_clients: u32) -> u32 {
+    pub fn set_max_clients(&self, max_clients: u32) -> Result<u32, String> {
         let next = normalize_max_clients(max_clients);
         let mut g = self.inner.lock();
+        let mut saved = Self::preferences(&g);
+        saved.max_clients = next;
+        self.save_preferences(&saved)?;
         let prev = g.max_clients;
         g.max_clients = next;
         g.env.max_clients = next;
@@ -259,11 +313,14 @@ impl MirrorHost {
                 "mirror: max concurrent clients updated"
             );
         }
-        next
+        Ok(next)
     }
 
-    pub fn set_read_only(&self, read_only: bool) {
+    pub fn set_read_only(&self, read_only: bool) -> Result<(), String> {
         let mut g = self.inner.lock();
+        let mut saved = Self::preferences(&g);
+        saved.read_only = read_only;
+        self.save_preferences(&saved)?;
         let prev = g
             .runtime
             .as_ref()
@@ -281,6 +338,7 @@ impl MirrorHost {
                 "mirror: phone write access toggled"
             );
         }
+        Ok(())
     }
 
     /// Opt-in LAN bind. Loopback is the default. Rebinds HTTP when already running.
@@ -303,6 +361,7 @@ impl MirrorHost {
         } else {
             self.refresh_access_urls();
         }
+        self.save_preferences(&Self::preferences(&self.inner.lock()))?;
         Ok(self.status())
     }
 
@@ -370,10 +429,16 @@ impl MirrorHost {
     pub fn rotate_token(&self) -> Result<MirrorStatus, String> {
         let clients_before = self.hub.client_count() as u32;
         let mut g = self.inner.lock();
-        let Some(r) = g.runtime.as_mut() else {
+        if g.runtime.is_none() {
             return Err("mirror is not running".into());
-        };
-        r.token = generate_token();
+        }
+        let next_token = generate_token();
+        let mut saved = Self::preferences(&g);
+        saved.token = Some(next_token.clone());
+        self.save_preferences(&saved)?;
+        g.env.token = Some(next_token.clone());
+        let r = g.runtime.as_mut().expect("running host");
+        r.token = next_token;
         let tail = auth::token_tail(&r.token, 6);
         if let Some(url) = r.public_url.clone() {
             if let Some(base) = url.split("/t/").next() {
@@ -461,7 +526,7 @@ impl MirrorHost {
             allow_lan
         };
 
-        let (bound_port, shutdown_tx) = match http::start_server(
+        let (bound_port, shutdown_tx) = match bind_http_with_retry(
             self.clone(),
             prefer_port,
             dist_dir.clone(),
@@ -486,6 +551,19 @@ impl MirrorHost {
 
         {
             let mut g = self.inner.lock();
+            let mut saved = Self::preferences(&g);
+            saved.enabled = true;
+            saved.token = Some(token.clone());
+            saved.port = Some(bound_port);
+            if let Err(e) = self.save_preferences(&saved) {
+                drop(g);
+                let _ = shutdown_tx.send(());
+                self.stop_inner();
+                return Err(e);
+            }
+            g.env.headless = true;
+            g.env.token = Some(token.clone());
+            g.env.port = Some(bound_port);
             if let Some(r) = g.runtime.as_mut() {
                 r.port = bound_port;
                 r.phase = if env.no_tunnel {
@@ -549,6 +627,13 @@ impl MirrorHost {
 
     /// Full teardown; invalidates token immediately; stops the active tunnel adapter.
     pub async fn stop(&self) -> Result<MirrorStatus, String> {
+        {
+            let mut g = self.inner.lock();
+            let mut saved = Self::preferences(&g);
+            saved.enabled = false;
+            self.save_preferences(&saved)?;
+            g.env.headless = false;
+        }
         self.stop_inner();
         // Brief yield so server task can observe shutdown.
         tokio::task::yield_now().await;
@@ -569,6 +654,7 @@ impl MirrorHost {
             };
             (tx, tun)
         };
+        self.hub.disconnect_all();
         if let Some(t) = tunnel {
             t.stop();
             tracing::info!("mirror tunnel adapter stopped");
@@ -639,19 +725,6 @@ async fn bind_http_with_retry(
                 last = e;
                 tokio::time::sleep(Duration::from_millis(40 * (i + 1) as u64)).await;
             }
-        }
-    }
-    if port != 0 {
-        match http::start_server(host, 0, dist_dir, allow_lan).await {
-            Ok(v) => {
-                tracing::warn!(
-                    preferred = port,
-                    bound = v.0,
-                    "mirror rebind fell back to an ephemeral port"
-                );
-                return Ok(v);
-            }
-            Err(e) => last = e,
         }
     }
     Err(last)
@@ -739,13 +812,13 @@ pub async fn mirror_stop(host: State<'_, Arc<MirrorHost>>) -> Result<MirrorStatu
     host.stop().await
 }
 
-/// Spawn headless auto-start when `GROK_MIRROR_HEADLESS=1`.
+/// Restore an enabled mirror host, or explicitly start in headless mode.
 pub fn maybe_autostart(host: Arc<MirrorHost>, app: AppHandle, mgr: Arc<SessionManager>) {
     if !host.env().headless {
         return;
     }
     host.attach(app, mgr);
-    tracing::info!("GROK_MIRROR_HEADLESS=1 — auto-starting mirror host");
+    tracing::info!("restoring enabled mirror host");
     tauri::async_runtime::spawn(async move {
         match host.start().await {
             Ok(st) => {
@@ -763,180 +836,13 @@ pub fn maybe_autostart(host: Arc<MirrorHost>, app: AppHandle, mgr: Arc<SessionMa
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn env_config_defaults() {
-        // Smoke: parsing does not panic; values depend on process env.
-        let c = MirrorEnvConfig::from_env();
-        let _ = c.headless;
-        let _ = c.no_tunnel;
-        assert!(c.max_clients >= MIN_CLIENTS && c.max_clients <= MAX_CLIENTS_CAP);
-    }
-
-    #[test]
-    fn normalize_max_clients_clamps() {
-        assert_eq!(normalize_max_clients(0), MIN_CLIENTS);
-        assert_eq!(normalize_max_clients(4), 4);
-        assert_eq!(normalize_max_clients(99), MAX_CLIENTS_CAP);
-    }
-
-    #[test]
-    fn resolve_dist_prefers_existing() {
-        let p = resolve_dist_dir(None);
-        // Path is absolute-ish or relative; just ensure function returns something.
-        assert!(!p.as_os_str().is_empty());
-    }
-
-    #[test]
-    fn set_max_clients_clamps_and_status() {
-        let host = MirrorHost::from_env();
-        assert_eq!(host.set_max_clients(0), MIN_CLIENTS);
-        assert_eq!(host.max_clients(), MIN_CLIENTS);
-        assert_eq!(host.set_max_clients(100), MAX_CLIENTS_CAP);
-        let st = host.status();
-        assert_eq!(st.max_clients, MAX_CLIENTS_CAP);
-        assert!(!st.running);
-    }
-
-    #[tokio::test]
-    async fn token_gate_health_ac3() {
-        let host = Arc::new(MirrorHost {
-            inner: Mutex::new(Inner {
-                env: MirrorEnvConfig {
-                    headless: false,
-                    token: Some("test-token-please-use-long-random-value-0123456789".into()),
-                    port: Some(0), // ephemeral
-                    no_tunnel: true,
-                    allow_lan: false,
-                    dist: Some(resolve_dist_dir(None)),
-                    max_clients: DEFAULT_MAX_CLIENTS,
-                },
-                runtime: None,
-                ctx: None,
-                read_only: true,
-                max_clients: DEFAULT_MAX_CLIENTS,
-                allow_lan: false,
-            }),
-            hub: Arc::new(ws::WsHub::new()),
-        });
-        let st = host.start().await.expect("start");
-        assert!(st.running);
-        let port = st.local_port.expect("port");
-        let token = st.token.expect("token");
-
-        let client = reqwest::Client::new();
-        let good = client
-            .get(format!("http://127.0.0.1:{port}/t/{token}/api/health"))
-            .send()
-            .await
-            .expect("good req");
-        assert_eq!(good.status().as_u16(), 200);
-
-        let bad = client
-            .get(format!("http://127.0.0.1:{port}/t/wrong-token/api/health"))
-            .send()
-            .await
-            .expect("bad req");
-        assert_eq!(bad.status().as_u16(), 401);
-
-        let index = client
-            .get(format!("http://127.0.0.1:{port}/t/{token}/"))
-            .header(
-                "user-agent",
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-            )
-            .send()
-            .await
-            .expect("index");
-        assert_eq!(index.status().as_u16(), 200);
-        let body = index.text().await.unwrap_or_default();
-        assert!(
-            body.contains("__MIRROR__") || body.contains("root"),
-            "expected SPA/placeholder body, got len {}",
-            body.len()
-        );
-
-        host.stop().await.expect("stop");
-        let after = client
-            .get(format!("http://127.0.0.1:{port}/t/{token}/api/health"))
-            .send()
-            .await;
-        // Server may be gone (connection error) or still draining with non-OK.
-        if let Ok(r) = after {
-            let code = r.status().as_u16();
-            assert!(
-                code == 401 || code == 404 || code == 502 || code >= 500,
-                "unexpected status after stop: {code}"
-            );
-        }
-        // connection refused after shutdown is fine
-    }
-
-    /// Placeholder HTML (missing dist/index.html) must carry no-store Cache-Control
-    /// so phones never permanently cache "Mirror host online (dist not found)".
-    #[tokio::test]
-    async fn placeholder_index_has_no_store_cache_control() {
-        let missing =
-            std::env::temp_dir().join(format!("grok-mirror-missing-dist-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&missing);
-        std::fs::create_dir_all(&missing).expect("temp dist dir");
-        // intentionally no index.html
-
-        let host = Arc::new(MirrorHost {
-            inner: Mutex::new(Inner {
-                env: MirrorEnvConfig {
-                    headless: false,
-                    token: Some("placeholder-cache-token-0123456789abcdef".into()),
-                    port: Some(0),
-                    no_tunnel: true,
-                    allow_lan: false,
-                    dist: Some(missing.clone()),
-                    max_clients: DEFAULT_MAX_CLIENTS,
-                },
-                runtime: None,
-                ctx: None,
-                read_only: true,
-                max_clients: DEFAULT_MAX_CLIENTS,
-                allow_lan: false,
-            }),
-            hub: Arc::new(ws::WsHub::new()),
-        });
-        let st = host.start().await.expect("start");
-        let port = st.local_port.expect("port");
-        let token = st.token.expect("token");
-
-        let client = reqwest::Client::new();
-        let res = client
-            .get(format!("http://127.0.0.1:{port}/t/{token}/"))
-            .send()
-            .await
-            .expect("index");
-        assert_eq!(res.status().as_u16(), 200);
-        let cc = res
-            .headers()
-            .get(reqwest::header::CACHE_CONTROL)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        assert_eq!(
-            cc, "no-cache, no-store, must-revalidate",
-            "placeholder must not be cacheable"
-        );
-        let body = res.text().await.unwrap_or_default();
-        assert!(
-            body.contains("dist not found") || body.contains("__MIRROR__"),
-            "expected placeholder body, got len {}",
-            body.len()
-        );
-
-        host.stop().await.expect("stop");
-        let _ = std::fs::remove_dir_all(&missing);
-    }
-}
+mod host_test;
 
 #[cfg(test)]
 mod lan_bind_test;
+
+#[cfg(test)]
+mod restart_test;
 
 #[tauri::command]
 pub async fn mirror_set_allow_lan(
@@ -956,7 +862,7 @@ pub async fn mirror_set_read_only(
     host: State<'_, Arc<MirrorHost>>,
     read_only: bool,
 ) -> Result<MirrorStatus, String> {
-    host.set_read_only(read_only);
+    host.set_read_only(read_only)?;
     Ok(host.status())
 }
 
@@ -965,6 +871,6 @@ pub async fn mirror_set_max_clients(
     host: State<'_, Arc<MirrorHost>>,
     max_clients: u32,
 ) -> Result<MirrorStatus, String> {
-    host.set_max_clients(max_clients);
+    host.set_max_clients(max_clients)?;
     Ok(host.status())
 }

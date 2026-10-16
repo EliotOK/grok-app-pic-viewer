@@ -304,7 +304,10 @@ pub fn run() {
 
     let session_mgr = Arc::new(SessionManager::new());
 
-    let mirror_host = Arc::new(MirrorHost::from_env());
+    let mirror_host = Arc::new(MirrorHost::from_persisted_env().unwrap_or_else(|error| {
+        tracing::error!(%error, "mirror preferences could not be loaded");
+        MirrorHost::from_env()
+    }));
 
     let voice_host = Arc::new(voice_host::VoiceHost::new());
 
@@ -981,7 +984,7 @@ pub fn run() {
                 remote_im::start_health_watchdog(rim_watch);
             }
 
-            // Headless mirror auto-start (GROK_MIRROR_HEADLESS=1) — off by default.
+            // Restore the saved mirror host after desktop restart.
 
             {
 
