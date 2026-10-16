@@ -512,7 +512,7 @@ impl IntoResponse for FileChunk {
     }
 }
 
-pub(crate) fn read_file_chunk(
+fn read_file_chunk(
     path: &Path,
     range_hdr: Option<&str>,
     head_only: bool,
