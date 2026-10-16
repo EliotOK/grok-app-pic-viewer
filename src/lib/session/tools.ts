@@ -1,5 +1,7 @@
 import { currentTurnHasEndMarker } from "../endOfTurn";
 import { bashArgFromToolTitle, inferKindFromToolCallId } from "../toolDisplay";
+import { upsertToolInSegments, upsertToolsInSegments } from "./toolSegmentUpdates";
+export { upsertToolInSegments } from "./toolSegmentUpdates";
 import {
   maybeCompactToolOutputForMemory,
   shouldCompactToolOutputForMemory,
@@ -176,63 +178,6 @@ export function toolSegmentFromFields(fields: {
   };
 }
 
-/**
- * Insert or update a tool segment on an assistant segment timeline.
- * New tools append (true stream order); status updates mutate in place.
- */
-export function upsertToolInSegments(
-  segs: MessageSegment[],
-  tool: MessageToolSegment,
-): MessageSegment[] {
-  const next = segs.map((s) =>
-    s.kind === "tool" ? { ...s } : { ...s },
-  ) as MessageSegment[];
-  let si = next.findIndex(
-    (s) => s.kind === "tool" && s.toolCallId === tool.toolCallId,
-  );
-  // Same Host family (live uuid vs journal uuid) → update in place, never append.
-  if (si < 0) {
-    const fam = hostToolFamilyKey(tool.toolCallId, tool.toolKind, tool.title);
-    if (fam) {
-      si = next.findIndex(
-        (s) =>
-          s.kind === "tool" &&
-          hostToolFamilyKey(s.toolCallId, s.toolKind, s.title) === fam,
-      );
-    }
-  }
-  if (si >= 0) {
-    const prev = next[si] as MessageToolSegment;
-    // Never wipe a good title with empty/generic.
-    const title =
-      (tool.title && !isGenericToolLabel(tool.title) ? tool.title : "") ||
-      prev.title;
-    const detail =
-      (tool.detail || "").length >= (prev.detail || "").length
-        ? tool.detail || prev.detail
-        : prev.detail || tool.detail;
-    next[si] = {
-      ...prev,
-      ...tool,
-      // Keep the first stable host id so React keys stay put.
-      toolCallId: prev.toolCallId || tool.toolCallId,
-      title,
-      detail,
-      path: tool.path || prev.path,
-      // Status-only ticks must not wipe a known call argument.
-      input: tool.input || prev.input,
-      // Same for stdout: sparse ticks omit output; after #1029 the standalone
-      // row may also have cleared toolOutput once woven — never erase segment.
-      output: (tool.output || "").trim() ? tool.output : prev.output,
-      meta: tool.meta || prev.meta,
-      toolKind: tool.toolKind || prev.toolKind,
-    };
-    return next;
-  }
-  next.push({ ...tool });
-  return next;
-}
-
 /** True when any assistant in the list already inlines this toolCallId. */
 export function isToolInlinedInAssistants(
   messages: ChatMessage[],
@@ -367,31 +312,11 @@ export function mergeToolsIntoAssistantSegments(
   tools: MessageToolSegment[],
 ): MessageSegment[] {
   if (!tools.length) return compactMessageSegments(segs);
-  const existingIds = new Set(
-    segs
-      .filter((s): s is MessageToolSegment => s.kind === "tool")
-      .map((s) => s.toolCallId),
-  );
-  const existingFamilies = new Set(
-    segs
-      .filter((s): s is MessageToolSegment => s.kind === "tool")
-      .map((s) => hostToolFamilyKey(s.toolCallId, s.toolKind, s.title))
-      .filter((k): k is string => !!k),
-  );
-  const missing = tools.filter((t) => {
-    if (existingIds.has(t.toolCallId)) return false;
-    const fam = hostToolFamilyKey(t.toolCallId, t.toolKind, t.title);
-    if (fam && existingFamilies.has(fam)) return false;
-    return true;
-  });
-
   const alreadyHasTools = segs.some((s) => s.kind === "tool");
   if (alreadyHasTools) {
     // Always upsert the full turn tool list: completed journal rows must
     // settle live in_progress segments even when a newer tool is missing.
-    let next = segs;
-    for (const t of tools) next = upsertToolInSegments(next, t);
-    return compactMessageSegments(next);
+    return compactMessageSegments(upsertToolsInSegments(segs, tools));
   }
 
   // Legacy journal reconstruction: tools between reasoning and answer.
@@ -405,7 +330,7 @@ export function mergeToolsIntoAssistantSegments(
   return compactMessageSegments([
     ...thoughts,
     ...rest,
-    ...missing,
+    ...tools,
     ...contents,
   ]);
 }

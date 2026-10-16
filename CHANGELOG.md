@@ -52,11 +52,13 @@ See `docs/llm-wiki/release.md`.
 ### Fixed
 - Long conversations open with a bounded set of visible messages.
 - Tool-heavy conversations filter duplicate tool rows more efficiently.
+- Tool result updates reuse unchanged message segments.
 - Remote control uses fewer resources while idle.
 
 **中文 · 修复**
 - 长对话首次打开时只挂载有限数量的消息。
 - 工具调用较多的对话可以更高效地过滤重复工具消息。
+- 工具结果更新会复用未变化的消息片段。
 - 远程控制空闲时占用更少资源。
 
 ## [0.2.41] - 2026-10-16
