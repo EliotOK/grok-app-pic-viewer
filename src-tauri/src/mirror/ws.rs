@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
+use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::broadcast;
@@ -57,15 +58,28 @@ impl WsHub {
     }
 
     /// Fan-out a named event (payload already JSON-serializable).
-    pub fn broadcast(&self, name: &str, payload: &Value) {
-        let frame = json!({
-            "type": "event",
-            "name": name,
-            "payload": payload,
-        });
-        let s = frame.to_string();
-        // Ignore "no receivers" — hub may be idle.
-        let _ = self.tx.send(s);
+    pub fn broadcast(&self, name: &str, payload: &impl Serialize) {
+        if self.tx.receiver_count() == 0 {
+            return;
+        }
+        #[derive(Serialize)]
+        struct EventFrame<'a, T: Serialize> {
+            #[serde(rename = "type")]
+            kind: &'static str,
+            name: &'a str,
+            payload: &'a T,
+        }
+        let frame = EventFrame {
+            kind: "event",
+            name,
+            payload,
+        };
+        match serde_json::to_string(&frame) {
+            Ok(text) => {
+                let _ = self.tx.send(text);
+            }
+            Err(error) => tracing::warn!(%error, event = name, "mirror fanout: serialize failed"),
+        }
     }
 
     fn client_joined(&self) -> usize {
@@ -80,6 +94,10 @@ impl WsHub {
             });
     }
 }
+
+#[cfg(test)]
+#[path = "ws_broadcast_test.rs"]
+mod broadcast_tests;
 
 /// Per-connection handler after HTTP upgrade (token already gated).
 pub async fn handle_socket(

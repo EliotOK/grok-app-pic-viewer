@@ -162,7 +162,9 @@ export function useChatMessageVirtualizer(
     offsets: number[];
   } | null>(null);
 
-  const [win, setWin] = useState<ChatVirtualWindow>(() => fullChatVirtualWindow(itemCount));
+  const [win, setWin] = useState<ChatVirtualWindow>(() =>
+    virtualized ? chatOpenPinWindow(itemCount) : fullChatVirtualWindow(itemCount),
+  );
   const winRef = useRef(win);
   winRef.current = win;
   /**
@@ -301,9 +303,7 @@ export function useChatMessageVirtualizer(
     }
     const el = viewportRef.current;
     if (!el) {
-      const next = fullChatVirtualWindow(count);
-      winRef.current = next;
-      setWin(next);
+      // Keep the bounded first-paint window until layout can measure the view.
       return;
     }
     // Hidden / 0-height WebView: a pin window built with clientHeight 0

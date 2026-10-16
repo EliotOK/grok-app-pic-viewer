@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::oneshot;
 
@@ -266,7 +266,7 @@ impl MirrorHost {
     }
 
     /// Fan-out a session event to all mirror WS clients (payload as JSON).
-    pub fn broadcast(&self, name: &str, payload: &Value) {
+    pub fn broadcast(&self, name: &str, payload: &impl Serialize) {
         self.hub.broadcast(name, payload);
     }
 
@@ -751,19 +751,10 @@ pub fn notify_sessions_changed<R: tauri::Runtime>(
 
 /// Emit to desktop WebView **and** mirror WS clients (DESIGN §7.3).
 /// Prefer this over bare `app.emit` for all `session://*` chat events.
-pub fn fanout_event<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    name: &str,
-    payload: impl Serialize + Clone,
-) {
-    let _ = app.emit(name, payload.clone());
+pub fn fanout_event<R: tauri::Runtime>(app: &AppHandle<R>, name: &str, payload: impl Serialize) {
+    let _ = app.emit(name, &payload);
     if let Some(host) = app.try_state::<Arc<MirrorHost>>() {
-        match serde_json::to_value(&payload) {
-            Ok(v) => host.broadcast(name, &v),
-            Err(e) => {
-                tracing::warn!(error = %e, event = name, "mirror fanout: serialize failed");
-            }
-        }
+        host.broadcast(name, &payload);
     }
 }
 

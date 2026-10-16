@@ -8,6 +8,40 @@ import { useChatMessageVirtualizer } from "./useChatMessageVirtualizer";
 afterEach(cleanup);
 
 describe("useChatMessageVirtualizer", () => {
+  it("bounds the first render of a long transcript before layout runs", () => {
+    const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 600 });
+    const viewportRef = { current: viewport };
+    const isPinnedRef = { current: true };
+    const renderedCounts: number[] = [];
+    renderHook(() => {
+      const window = useChatMessageVirtualizer({
+        itemCount: 10_000,
+        getKey: (i) => `message-${i}`,
+        getEstimateHeight: () => 120,
+        viewportRef,
+        isPinnedRef,
+      });
+      renderedCounts.push(window.end - window.start);
+      return window;
+    });
+    expect(renderedCounts[0]).toBeLessThanOrEqual(24);
+  });
+
+  it("keeps a bounded window while the viewport is not attached", () => {
+    const viewportRef = { current: null };
+    const isPinnedRef = { current: true };
+    const { result } = renderHook(() => useChatMessageVirtualizer({
+      itemCount: 10_000,
+      getKey: (i) => `message-${i}`,
+      viewportRef,
+      isPinnedRef,
+    }));
+    expect(result.current.virtualized).toBe(true);
+    expect(result.current.end - result.current.start).toBeLessThanOrEqual(24);
+    expect(result.current.richEnd - result.current.richStart).toBeLessThanOrEqual(8);
+  });
+
   it("renders full non-virtualized window when itemCount is below threshold and height is small", () => {
     const viewport = document.createElement("div");
     const isPinnedRef = { current: true };
