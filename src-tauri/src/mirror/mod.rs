@@ -654,6 +654,7 @@ impl MirrorHost {
             };
             (tx, tun)
         };
+        self.hub.disconnect_all();
         if let Some(t) = tunnel {
             t.stop();
             tracing::info!("mirror tunnel adapter stopped");

@@ -1,4 +1,5 @@
 use super::*;
+use futures_util::StreamExt;
 
 #[tokio::test]
 async fn restart_restores_pairing_policy_and_explicit_stop() {
@@ -60,4 +61,36 @@ async fn occupied_saved_port_does_not_change_pairing() {
     assert!(host.start().await.is_err());
     assert_eq!(host.env().port, Some(port));
     assert!(!host.status().running);
+}
+
+#[tokio::test]
+async fn stopping_host_disconnects_an_existing_phone_socket() {
+    let host = Arc::new(MirrorHost::from_env());
+    {
+        let mut g = host.inner.lock();
+        g.env.port = Some(0);
+        g.env.no_tunnel = true;
+    }
+    let status = host.start().await.unwrap();
+    let url = format!(
+        "ws://127.0.0.1:{}/t/{}/ws",
+        status.local_port.unwrap(),
+        status.token.unwrap()
+    );
+    let (mut socket, _) = tokio_tungstenite::connect_async(url).await.unwrap();
+    let hello = tokio::time::timeout(Duration::from_secs(2), socket.next())
+        .await
+        .unwrap();
+    assert!(matches!(
+        hello,
+        Some(Ok(tokio_tungstenite::tungstenite::Message::Text(_)))
+    ));
+    host.stop().await.unwrap();
+    let closed = tokio::time::timeout(Duration::from_secs(2), socket.next())
+        .await
+        .unwrap();
+    assert!(matches!(
+        closed,
+        None | Some(Err(_)) | Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
+    ));
 }
